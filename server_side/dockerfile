@@ -1,0 +1,12 @@
+# Use an existing image as the base image
+FROM python:3.9-slim-buster
+
+# Copy the server code into the image
+COPY . /app/
+
+# Set the working directory to /app
+WORKDIR /app
+
+# Set the entrypoint to the server code
+# ENTRYPOINT ["python", "server.py"]
+CMD ["python","-u","server.py"]
