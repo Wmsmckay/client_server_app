@@ -1,59 +1,68 @@
 import socket
-import sys
 import os
 
 # Create a TCP/IP socket
-sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
 # Bind the socket to a specific address and port
-server_address = ('localhost', 10000)
-print(f'starting up on {server_address[0]} port {server_address[1]}')
-sock.bind(server_address)
+server_address = ('0.0.0.0', 12345)
+server_socket.bind(server_address)
 
-# Listen for incoming connections
-sock.listen(1)
+# Start listening for incoming connections
+server_socket.listen(1)
+print(f"Server listening on {server_address[0]}:{server_address[1]}")
 
 while True:
     # Wait for a connection
-    print('waiting for a connection')
-    connection, client_address = sock.accept()
-    print(f'connection from {client_address}')
+    print("Waiting for a connection...")
+    client_socket, client_address = server_socket.accept()
+    print(f"Client connected from {client_address[0]}:{client_address[1]}")
 
-    # Receive the data in small chunks and retransmit it
-    while True:
-        data = connection.recv(16).decode()
-        print(f'received {data}')
-        if data == 'UPLOAD':
-            connection.sendall('ACK'.encode())
-            filename = connection.recv(1024).decode()
-            with open(f'files/{filename}', 'wb') as f:
-                while True:
-                    file_data = connection.recv(1024)
-                    if not file_data:
-                        break
-                    f.write(file_data)
-            connection.sendall('ACK'.encode())
-        elif data == 'DOWNLOAD':
-            if os.listdir('files'):
-                connection.sendall('ACK'.encode())
-                files = os.listdir('files')
-                connection.sendall(str(files).encode())
-                filename = connection.recv(1024).decode()
-                with open(f'files/{filename}', 'rb') as f:
-                    while True:
-                        file_data = f.read(1024)
-                        if not file_data:
-                            break
-                        connection.sendall(file_data)
-                connection.sendall('ACK'.encode())
-            else:
-                connection.sendall('EMPTY'.encode())
-        elif data:
-            response = f'ACK: {data}'
-            connection.sendall(response.encode())
-        else:
-            print(f'no more data from {client_address}')
-            break
+    # Receive the command from the client
+    command = client_socket.recv(1024).decode()
+    if command == "upload":
+        # Receive the file name
+        filename = client_socket.recv(1024).decode()
+        print(f"Receiving file {filename}...")
 
-    # Clean up the connection
-    connection.close()
+        # Receive the file size
+        file_size = int(client_socket.recv(1024).decode())
+        client_socket.send(b"ACK")
+
+        # Receive the file
+        with open(f"files/{filename}", "wb") as f:
+            received_size = 0
+            while received_size < file_size:
+                chunk = client_socket.recv(1024)
+                received_size += len(chunk)
+                f.write(chunk)
+
+        print(f"{filename} received successfully")
+
+    elif command == "download":
+        # Send the list of files
+        files = os.listdir("files")
+        client_socket.send(";".join(files).encode())
+
+        # Receive the file name
+        filename = client_socket.recv(1024).decode()
+        print(f"Sending file {filename}...")
+
+        # Send the file size
+        file_size = os.path.getsize(f"files/{filename}")
+        client_socket.send(str(file_size).encode())
+        client_socket.recv(1024)
+
+        # Send the file
+        with open(f"files/{filename}", "rb") as f:
+            for chunk in iter(lambda: f.read(1024), b""):
+                client_socket.send(chunk)
+
+        print(f"{filename} sent successfully")
+
+    else:
+        print("Invalid command")
+
+    # Close the connection
+    client_socket.close()
+    print(f"Client disconnected from {client_address[0]}:{client_address[1]}")

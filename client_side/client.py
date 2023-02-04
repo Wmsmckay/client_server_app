@@ -1,48 +1,60 @@
 import socket
-import sys
+import os
 
 # Create a TCP/IP socket
-sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-# Connect the socket to the server's address and port
-server_address = ('localhost', 10000)
-print(f'connecting to {server_address}')
-sock.connect(server_address)
+# Connect to the server
+server_ip = input("Enter the server IP: ")
+port = 12345
+client_socket.connect((server_ip, port))
 
-try:
-    while True:
-        # Read user input
-        message = input("Enter a command (UPLOAD/DOWNLOAD/QUIT): ")
+# Ask the user if they want to upload or download a file
+command = input("Do you want to upload or download a file? (upload/download): ")
+client_socket.send(command.encode())
 
-        # Send the user input to the server
-        sock.sendall(message.encode('utf-8'))
+if command == "upload":
+    # Get the file name
+    filename = input("Enter the file name: ")
+    client_socket.send(filename.encode())
 
-        # Check if the user wants to upload a file
-        if message.startswith('UPLOAD'):
-            filename = message.split()[1]
-            with open(filename, 'rb') as f:
-                data = f.read()
-                sock.sendall(data)
-            print(f'{filename} has been sent to the server.')
-        elif message.startswith('DOWNLOAD'):
-            filename = message.split()[1]
-            sock.sendall(filename.encode('utf-8'))
-            data = sock.recv(1024)
-            if data == b'FILE NOT FOUND':
-                print(f'{filename} not found on the server.')
-            else:
-                with open(filename, 'wb') as f:
-                    f.write(data)
-                print(f'{filename} has been downloaded from the server.')
-        elif message == 'QUIT':
-            print('Closing the connection.')
-            break
-        else:
-            # Receive the response from the server
-            data = sock.recv(1024)
-            print(f'received {data.decode("utf-8")}')
+    # Get the file size
+    file_size = os.path.getsize(filename)
+    client_socket.send(str(file_size).encode())
+    client_socket.recv(1024)
 
-finally:
-    # Clean up the socket
-    print('Closing socket')
-    sock.close()
+    # Send the file
+    with open(filename, "rb") as f:
+        for chunk in iter(lambda: f.read(1024), b""):
+            client_socket.send(chunk)
+
+    print(f"{filename} uploaded successfully")
+
+elif command == "download":
+    # Get the list of files from the server
+    files = client_socket.recv(1024).decode().split(";")
+    print("Files available for download:", files)
+
+    # Get the file name
+    filename = input("Enter the file name: ")
+    client_socket.send(filename.encode())
+
+    # Get the file size
+    file_size = int(client_socket.recv(1024).decode())
+    client_socket.send(b"ACK")
+
+    # Receive the file
+    with open(filename, "wb") as f:
+        received_size = 0
+        while received_size < file_size:
+            chunk = client_socket.recv(1024)
+            received_size += len(chunk)
+            f.write(chunk)
+
+    print(f"{filename} downloaded successfully")
+
+else:
+    print("Invalid command")
+
+# Close the connection
+client_socket.close()
