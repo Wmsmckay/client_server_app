@@ -8,7 +8,7 @@ To start the server, run the server.py file. The server will listen for incoming
 
 (The client and server need to be ran on separate devices)
 
-[Software Demo Video](http://youtube.link.goes.here)
+[Software Demo Video](https://youtu.be/-jeNZ9PYGSg)
 
 # Network Communication
 
